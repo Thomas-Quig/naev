@@ -2,13 +2,13 @@
 import os
 
 # naev Imports
+from utils import *
 
 # 3rd Party Imports
 
 
 
 def main():
-	print("[naev] main() running...")
-
+	get_pkg_src('naev-npm','1.0.0')
 if __name__ == '__main__':
 	main()
