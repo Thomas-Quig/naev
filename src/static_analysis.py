@@ -3,14 +3,381 @@ from os import listdir
 from os.path import isfile, join
 
 # naev Imports
-from utils/utils import *
+from utils.utils import *
 
 # 3rd Party Imports
+import numpy as np
+
+# Assumes that remove_comments has been run previously
+def remove_strings(contents):
+
+    # Identify strings
+    in_single_quotes = contents[0] == "\'"
+    in_double_quotes = contents[0] == "\""
+    strings = []
+    for i in range(1, len(contents)):
+        if contents[i] == "\"" and contents[i-1] != "\\":
+            if in_double_quotes:
+                in_double_quotes = False
+                strings[-1][-1] = i
+            elif not in_single_quotes:
+                in_double_quotes = True
+                strings.append([i, -1])
+        elif contents[i] == "\'" and contents[i-1] != "\\":
+            if in_single_quotes:
+                in_single_quotes = False
+                strings[-1][-1] = i
+            elif not in_double_quotes:
+                in_single_quotes = True
+                strings.append([i, -1])
+    
+    # Remove strings
+    strings.reverse()
+    for start_index, end_index in strings:
+        contents = contents[:start_index] + "\"\"" + contents[end_index + 1:]
+
+    return contents
+
+def remove_comments_and_strings(contents):
+
+    # Identify comments and strings and record their locations
+    in_single_quotes = False
+    in_double_quotes = False
+    in_single_comment = False
+    in_multi_comment = False
+    things_to_remove = []
+    is_quote = []
+    for i in range(1, len(contents)):
+        if contents[i-1:i+1] == "//":
+            if not in_single_quotes and not in_double_quotes and not in_multi_comment and not in_single_comment:
+                in_single_comment = True
+                things_to_remove.append([i-1,-1])
+        elif contents[i] == "\n":
+            if in_single_comment:
+                in_single_comment = False
+                things_to_remove[-1][-1] = i - 1
+        elif contents[i-1:i+1] == "/*":
+            if not in_single_quotes and not in_double_quotes and not in_single_comment and not in_multi_comment:
+                in_multi_comment = True
+                things_to_remove.append([i-1,-1])
+        elif contents[i-1:i+1] == "*/":
+            if in_multi_comment:
+                in_multi_comment = False
+                things_to_remove[-1][-1] = i
+        elif contents[i] == "\"" and contents[i-1] != "\\":
+            if in_double_quotes:
+                in_double_quotes = False
+                things_to_remove[-1][-1] = i
+            elif not in_single_quotes and not in_single_comment and not in_multi_comment:
+                in_double_quotes = True
+                is_quote.append(len(things_to_remove))
+                things_to_remove.append([i,-1])
+        elif contents[i] == "\'" and contents[i-1] != "\\":
+            if in_single_quotes:
+                in_single_quotes = False
+                things_to_remove[-1][-1] = i
+            elif not in_double_quotes and not in_multi_comment and not in_single_comment:
+                in_single_quotes = True
+                is_quote.append(len(things_to_remove))
+                things_to_remove.append([i,-1])
+
+    # Remove identified comments and strings in reverse order, adding quotes for... quotes
+    for i in range(len(things_to_remove) -1, -1, -1):
+        start_index, end_index = things_to_remove[i]
+        if i in is_quote:
+            # print("Removing Quote: " + contents[start_index:end_index+1])
+            contents = contents[:start_index] +"\"\"" + contents[end_index + 1:]
+        else:
+            # print("Removing Comment: " + contents[start_index:end_index+1])
+            contents = contents[:start_index] + contents[end_index + 1:]
+
+    return contents
+
+# Assumes that content has already been preprocessed
+def get_exported_variables(contents):
+    exported_variables = []
+
+    # Get the relevant strings
+    variable_export_strings = contents.split("export let")[1:] + contents.split("export var")[1:]
+    for i in range(0, len(variable_export_strings)):
+        variable_export_strings[i] = variable_export_strings[i].split(";")[0]
+
+    # Parse them dang strings
+    for export_string in variable_export_strings:
+        variables = export_string.split(",")
+        for variable in variables:
+            exported_variables.append(variable.split("=")[0].strip())
+
+    return exported_variables
+
+# Assumes that content has already been preprocessed
+# Returns dictionary of functions with the structure {function_name : [param1, param2, ..., paramn]}
+def get_exported_functions(contents):
+    exported_functions = {}
+    
+    # Get the relevant strings
+    function_export_strings = contents.split("export function")[1:]
+    for i in range(0, len(function_export_strings)):
+        cur_string = function_export_strings[i]
+        depth = 1
+        for j in range(cur_string.find("(") + 1, len(cur_string)):
+            if cur_string[j] == "(":
+                depth += 1
+            elif cur_string[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    function_export_strings[i] = cur_string[:j]
+                    break
+
+    # Parse them dang strings
+    for export_string in function_export_strings:
+        function_name, params_string = export_string.split("(", 1)
+        function_name = function_name.strip()
+        exported_functions[function_name] = []
+
+        params = params_string.split(",")
+        for param in params:
+            exported_functions[function_name].append(param.split("=")[0].strip())
+    
+    return exported_functions
+
+# Assumes that content has already been preprocessed
+# Assumes no class nesting
+# Assumes maximum semicolon usage
+# Assumes upfront declarations are one per line
+# Assumes no generator methods
+# Assumes no async
+# Assumes no function declaration nesting
+# returns dictionary of classes with the structure {class_name : ([property1, property2, ..., propertyn], {function_name : [param1, param2, ..., paramn]})}
+def get_exported_classes(contents):
+    exported_classes = {}
+
+    # Get the relevant strings
+    class_export_strings = contents.split("export class")[1:]
+    for i in range(0, len(class_export_strings)):
+        cur_string = class_export_strings[i]
+        depth = 1
+        for j in range(cur_string.find("{") + 1, len(cur_string)):
+            if cur_string[j] == "{":
+                depth += 1
+            elif cur_string[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    class_export_strings[i] = cur_string[:j]
+                    break
+
+    # Parse them dang strings
+    for class_string in class_export_strings:
+        class_name, class_body = class_string.split("{", 1)
+        class_name = class_name.strip()
+        class_body = class_body.strip()
+        exported_classes[class_name] = ([],{})
+
+        # Extract the static things and remove them from the class body
+        static_strings = class_body.split("static ")[1:]
+        for static_string in static_strings:
+
+            # Remove prefixed get or set if it is a getter or a setter
+            cur_string = static_string
+            add_to_end_index = 0
+            if cur_string[:4] == "get " or cur_string[:4] == "set ":
+                cur_string = cur_string[4:]
+                add_to_end_index = 4
+
+            end_index = -1
+            # Decide if this is a static method or property
+            # It is a method if the first non alphanumeric character that is not '_' we encounter is a '(', property otherwise
+            for i in range(0, len(cur_string)):
+                if not (cur_string[i].isalnum() or cur_string[i] == "_"):
+                    if cur_string[i] == "(":    
+                        
+                        # This is a static method
+                        method_name = "static " + cur_string[:i]
+                        exported_classes[class_name][1][method_name] = []
+
+                        # Extract the params
+                        params = []
+                        depth = 1
+                        for j in range(i+1, len(cur_string)):
+                            if cur_string[j] == "(":
+                                depth += 1
+                            elif cur_string[j] == ")":
+                                depth -= 1
+                                if depth == 0:
+                                    params = cur_string[i+1:j].split(",")
+                                    break
+                        for param in params:
+                            param_name = param.split("=")[0].strip()
+                            if param_name != "":
+                                exported_classes[class_name][1][method_name].append(param_name)
+
+                        # Determine where the method ends
+                        depth = 1
+                        for j in range(cur_string.find("{") + 1, len(cur_string)):
+                            if cur_string[j] == "{":
+                                depth += 1
+                            elif cur_string[j] == "}":
+                                depth -= 1
+                                if depth == 0:
+                                    end_index = j
+                                    break
+                    else:   
+                        
+                        # This is a static property
+                        property_name = "static " + cur_string[:i]
+                        exported_classes[class_name][0].append(property_name)
+                        end_index = cur_string.find(";")
+                    break
+            
+            # Remove this static thing from the class body
+            class_body = class_body.replace("static " + static_string[:end_index + add_to_end_index + 1], "", 1)
+
+        # Christ that was a nightmare
+        # Now we detect all the upfront field declarations, which occur before ANY function definition
+        statements = class_body.split(";")
+        num_statements_to_remove = 0
+        for statement in statements:
+            statement = statement.strip() + ";"
+            if len(statement) == 1:
+                num_statements_to_remove += 1
+                continue
+            
+            # Check if it is a getter or a setter method
+            if statement[:4] == "get " or statement[:4] == "set ":
+                break
+
+            # Check if this is a method
+            is_method = False
+            for i in range(0, len(statement)):
+                if not(statement[i].isalnum() or statement[i] == "_" or statement[i] == "#"):   # '#' is only included here because private fields are allowed to be prefixed with it
+                    if statement[i] == "(":
+                        # This is a method
+                        is_method = True
+                    break
+            if is_method:
+                break
+
+            # Check if we should ignore this field
+            if statement[0] == "#" or statement[0] == "_":
+                num_statements_to_remove += 1
+                continue
+
+            # If we are here, we should add this field
+            num_statements_to_remove += 1
+            for i in range(0, len(statement)):
+                if not(statement[i].isalnum() or statement[i] == "_"):
+                    exported_classes[class_name][0].append(statement[:i])
+                    break
+        
+        # Now we remove all the upfront statements
+        if num_statements_to_remove == 1:
+            class_body = class_body.replace(statements[0] + ";", "")
+        else:
+            class_body = class_body.replace(";".join(statements[:num_statements_to_remove]), "")
+
+        # Now we do the method crawl
+        i = 0
+        while(i < len(class_body)):
+            if class_body[i].isalnum() or class_body[i] == "_":
+                
+                # This is the start of a method name
+                # Obtain the name
+                params_start = -1
+                for j in range(i, len(class_body)):
+                    if class_body[j] == "(":
+                        params_start = j
+                        break
+                method_name = class_body[i:params_start]
+                exported_classes[class_name][1][method_name] = []
+
+                # Extract the params
+                params = []
+                depth = 1
+                params_end = -1
+                for j in range(params_start+1, len(class_body)):
+                    if class_body[j] == "(":
+                        depth += 1
+                    elif class_body[j] == ")":
+                        depth -= 1
+                        if depth == 0:
+                            params = class_body[params_start+1:j].split(",")
+                            params_end = j
+                            break
+                for param in params:
+                    param_name = param.split("=")[0].strip()
+                    if param_name != "":
+                        exported_classes[class_name][1][method_name].append(param_name)
+
+                # Obtain the method body
+                depth = 0
+                body_end = -1
+                for j in range(params_end + 1, len(class_body)):
+                    if class_body[j] == "{":
+                        depth += 1
+                    elif class_body[j] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            body_end = j
+                            break
+                method_body = class_body[params_end + 1 : body_end].strip()
+
+                # Get any created fields from the method body
+                field_strings = method_body.split("this.")[1:]
+                for field_string in field_strings:
+                    for j in range(0, len(field_string)):
+                        if not (field_string[j].isalnum() or field_string[j] == "_"):
+                            if field_string[j] != "(":
+                                exported_classes[class_name][0].append(field_string[:j])
+                            break
+
+                # Skip over this method as i iterates
+                i = body_end
+
+            i += 1
+
+        # Remove duplicates
+        exported_classes[class_name] = (sorted(list(set(exported_classes[class_name][0]))), exported_classes[class_name][1])
+
+    # This sucks
+    return exported_classes
+
+# Returns the same as compare, but is limited to comparing one file across the versions
+def compare_files(lower_version_contents, higher_version_contents):
+    
+    # Do some preprocessing
+    lower_version_contents = remove_strings(remove_comments(lower_version_contents))
+    lower_version_contents = " ".join(lower_version_contents.split())
+    higher_version_contents = remove_strings(remove_comments(higher_version_contents))
+    higher_version_contents = " ".join(higher_version_contents.split())
+
+    # Compare exported variables
+    lower_exported_variables = get_exported_variables(lower_version_contents)
+    higher_exported_variables = get_exported_variables(higher_version_contents)
+    variable_delta = 0
+    for variable in lower_exported_variables:
+        if variable not in higher_exported_variables:
+            variable_delta += 1
+
+    # Compare exported functions
+    # Note that the param delta excludes parameters of functions that are missing altogether.
+    lower_exported_functions = get_exported_functions(lower_version_contents)
+    higher_exported_functions = get_exported_functions(higher_version_contents)
+    function_delta = 0
+    function_param_delta = 0
+    for function in lower_exported_functions:
+        if function not in higher_exported_functions:
+            function_delta += 1
+        else:
+            for param in lower_exported_functions[function]:
+                if param not in higher_exported_functions[function]:
+                    function_param_delta += 1
+
+    # Compare exported classes
+
 
 # This function analyzes the code of two versions of the same package to attempt to determine
 # if they are functionally equivalent. It analyzes them according to this rubric:
-# - We only check something if it is exported both when it is initially defined, and in the index.js file. If there is not an index.js file in the root package directory, we will check things exported when they are initially defined from any file in the root directory or the src directory. 
-# - Classes
+# - We only check something if it is exported when it is initially defined
 #     - We check that classes exported in the lower version are also exported in the higher version
 #     - properties
 #         - We ignore properties whose name is prefixed with '_' or '#'
@@ -27,7 +394,42 @@ from utils/utils import *
 #     - We check that all required parameters are the same across both versions.
 # @param lower_version_directory The root directory of the lower package version
 # @param higher_version_directory The root directory of the higher package version
-# @return This function returns a tuple of the form ((A, a), (B, b), (C, c), (D, d) (E, e)) where each letter represents a type of thing that was checked.
+# @return This function returns a tuple of the form [[A, a], [B, b], [C, c], [D, d] [E, e]] where each letter represents a type of thing that was checked.
 # The upper case letters represent the total number of that type of thing that were analyzed, while the lowercase letters represent the number of that type 
 # of thing that were detected as different. A = clsses, B = class properties, C = class functions, D = variables, E = functions
+# ASSUMPTIONS: The maximum number of semicolons are used, the export statement is always prefixed to the definition of the thing being exported, exports are not renamed
+# Assumes no generator methods
+# Assumes no async
+# Assumes no function declaration nesting
 def compare(lower_version_directory, higher_version_directory):
+    
+    # Load lower version for parsing
+    lower_version_files = {}
+    for filepath in get_all_js_files(lower_version_directory):
+        lower_version_files[filepath.split("/")[-1]] = (get_file_contents(filepath))
+
+    # Load higher version for parsing
+    higher_version_files = {}
+    for filepath in get_all_js_files(higher_version_directory):
+        higher_version_files[filepath.split("/")[-1]] = (get_file_contents(filepath))
+    
+    # Sum the deltas of every file
+    deltas = np.zeros((5,2), dtype=np.int64)
+    for filename in lower_version_files:
+        if filename in higher_version_files:
+            deltas += compare_files(lower_version_files[filename], higher_version_files[filename])
+        else:
+            deltas += compare_files(lower_version_files[filename], "")
+
+    return deltas.tolist()
+
+if __name__ == "__main__":
+    test_string = ""
+    with open("../test.js", "r") as f:
+        test_string = f.read()
+    test_string = remove_comments_and_strings(test_string)
+    test_string = " ".join(test_string.split())
+    # print(test_string)
+    print(get_exported_variables(test_string))
+    print(get_exported_functions(test_string))
+    print(get_exported_classes(test_string))
