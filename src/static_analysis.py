@@ -1,42 +1,10 @@
 # Python Imports
-from os import listdir
-from os.path import isfile, join
 
 # naev Imports
 from utils.utils import *
 
 # 3rd Party Imports
 import numpy as np
-
-# Assumes that remove_comments has been run previously
-def remove_strings(contents):
-
-    # Identify strings
-    in_single_quotes = contents[0] == "\'"
-    in_double_quotes = contents[0] == "\""
-    strings = []
-    for i in range(1, len(contents)):
-        if contents[i] == "\"" and contents[i-1] != "\\":
-            if in_double_quotes:
-                in_double_quotes = False
-                strings[-1][-1] = i
-            elif not in_single_quotes:
-                in_double_quotes = True
-                strings.append([i, -1])
-        elif contents[i] == "\'" and contents[i-1] != "\\":
-            if in_single_quotes:
-                in_single_quotes = False
-                strings[-1][-1] = i
-            elif not in_double_quotes:
-                in_single_quotes = True
-                strings.append([i, -1])
-    
-    # Remove strings
-    strings.reverse()
-    for start_index, end_index in strings:
-        contents = contents[:start_index] + "\"\"" + contents[end_index + 1:]
-
-    return contents
 
 def remove_comments_and_strings(contents):
 
@@ -343,17 +311,18 @@ def get_exported_classes(contents):
 
 # Returns the same as compare, but is limited to comparing one file across the versions
 def compare_files(lower_version_contents, higher_version_contents):
-    
+
     # Do some preprocessing
-    lower_version_contents = remove_strings(remove_comments(lower_version_contents))
+    lower_version_contents = remove_comments_and_strings(lower_version_contents)
     lower_version_contents = " ".join(lower_version_contents.split())
-    higher_version_contents = remove_strings(remove_comments(higher_version_contents))
+    higher_version_contents = remove_comments_and_strings(higher_version_contents)
     higher_version_contents = " ".join(higher_version_contents.split())
 
     # Compare exported variables
     lower_exported_variables = get_exported_variables(lower_version_contents)
     higher_exported_variables = get_exported_variables(higher_version_contents)
     variable_delta = 0
+    variable_ct = len(lower_exported_variables)
     for variable in lower_exported_variables:
         if variable not in higher_exported_variables:
             variable_delta += 1
@@ -363,17 +332,55 @@ def compare_files(lower_version_contents, higher_version_contents):
     lower_exported_functions = get_exported_functions(lower_version_contents)
     higher_exported_functions = get_exported_functions(higher_version_contents)
     function_delta = 0
+    function_ct = len(lower_exported_functions)
     function_param_delta = 0
+    function_param_ct = 0
     for function in lower_exported_functions:
         if function not in higher_exported_functions:
             function_delta += 1
         else:
+            function_param_ct += len(lower_exported_functions[function])
             for param in lower_exported_functions[function]:
                 if param not in higher_exported_functions[function]:
                     function_param_delta += 1
 
     # Compare exported classes
+    lower_exported_classes = get_exported_classes(lower_version_contents)
+    higher_exported_classes = get_exported_classes(higher_version_contents)
+    class_delta = 0
+    class_ct = len(lower_exported_classes)
+    class_function_delta = 0
+    class_function_ct = 0
+    class_function_param_delta = 0
+    class_function_param_ct = 0
+    class_property_delta = 0
+    class_property_ct = 0
+    for class_name in lower_exported_classes:
+        if class_name not in higher_exported_classes:
+            class_delta += 1
+        else:
+            class_property_ct += len(lower_exported_classes[class_name][0])
+            for class_property in lower_exported_classes[class_name][0]:
+                if class_property not in higher_exported_classes[class_name][0]:
+                    class_property_delta += 1
 
+            class_function_ct += len(lower_exported_classes[class_name][1])
+            for function in lower_exported_classes[class_name][1]:
+                if function not in higher_exported_classes[class_name][1]:
+                    class_function_delta += 1
+                else:
+                    class_function_param_ct += len(lower_exported_classes[class_name][1][function])
+                    for param in lower_exported_classes[class_name][1][function]:
+                        if param not in higher_exported_classes[class_name][1][function]:
+                            class_function_param_delta += 1
+
+    return [[class_ct, class_delta], 
+            [class_property_ct, class_property_delta], 
+            [class_function_ct, class_function_delta], 
+            [class_function_param_ct, class_function_param_delta], 
+            [variable_ct, variable_delta], 
+            [function_ct, function_delta], 
+            [function_param_ct, function_param_delta]]
 
 # This function analyzes the code of two versions of the same package to attempt to determine
 # if they are functionally equivalent. It analyzes them according to this rubric:
@@ -394,9 +401,9 @@ def compare_files(lower_version_contents, higher_version_contents):
 #     - We check that all required parameters are the same across both versions.
 # @param lower_version_directory The root directory of the lower package version
 # @param higher_version_directory The root directory of the higher package version
-# @return This function returns a tuple of the form [[A, a], [B, b], [C, c], [D, d] [E, e]] where each letter represents a type of thing that was checked.
+# @return This function returns a tuple of the form [[A, a], [B, b], [C, c], [D, d] [E, e], [F, f], [G, g]] where each letter represents a type of thing that was checked.
 # The upper case letters represent the total number of that type of thing that were analyzed, while the lowercase letters represent the number of that type 
-# of thing that were detected as different. A = clsses, B = class properties, C = class functions, D = variables, E = functions
+# of thing that were detected as different. A = clsses, B = class properties, C = class functions, D = class function parameters, E = variables, F = functions, G = function parameters
 # ASSUMPTIONS: The maximum number of semicolons are used, the export statement is always prefixed to the definition of the thing being exported, exports are not renamed
 # Assumes no generator methods
 # Assumes no async
@@ -414,7 +421,7 @@ def compare(lower_version_directory, higher_version_directory):
         higher_version_files[filepath.split("/")[-1]] = (get_file_contents(filepath))
     
     # Sum the deltas of every file
-    deltas = np.zeros((5,2), dtype=np.int64)
+    deltas = np.zeros((7,2), dtype=np.int64)
     for filename in lower_version_files:
         if filename in higher_version_files:
             deltas += compare_files(lower_version_files[filename], higher_version_files[filename])
@@ -424,12 +431,4 @@ def compare(lower_version_directory, higher_version_directory):
     return deltas.tolist()
 
 if __name__ == "__main__":
-    test_string = ""
-    with open("../test.js", "r") as f:
-        test_string = f.read()
-    test_string = remove_comments_and_strings(test_string)
-    test_string = " ".join(test_string.split())
-    # print(test_string)
-    print(get_exported_variables(test_string))
-    print(get_exported_functions(test_string))
-    print(get_exported_classes(test_string))
+    print(compare("../test_lower_version", "../test_higher_version"))

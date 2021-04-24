@@ -1,3 +1,7 @@
+# Python Imports
+from os import listdir
+from os.path import isfile, join
+
 # Obtain the contents of a file as a single string
 def get_file_contents(filename):
     contents = None
