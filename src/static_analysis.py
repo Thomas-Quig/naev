@@ -6,61 +6,6 @@ from utils.utils import *
 # 3rd Party Imports
 import numpy as np
 
-def remove_comments_and_strings(contents):
-
-    # Identify comments and strings and record their locations
-    in_single_quotes = False
-    in_double_quotes = False
-    in_single_comment = False
-    in_multi_comment = False
-    things_to_remove = []
-    is_quote = []
-    for i in range(1, len(contents)):
-        if contents[i-1:i+1] == "//":
-            if not in_single_quotes and not in_double_quotes and not in_multi_comment and not in_single_comment:
-                in_single_comment = True
-                things_to_remove.append([i-1,-1])
-        elif contents[i] == "\n":
-            if in_single_comment:
-                in_single_comment = False
-                things_to_remove[-1][-1] = i - 1
-        elif contents[i-1:i+1] == "/*":
-            if not in_single_quotes and not in_double_quotes and not in_single_comment and not in_multi_comment:
-                in_multi_comment = True
-                things_to_remove.append([i-1,-1])
-        elif contents[i-1:i+1] == "*/":
-            if in_multi_comment:
-                in_multi_comment = False
-                things_to_remove[-1][-1] = i
-        elif contents[i] == "\"" and contents[i-1] != "\\":
-            if in_double_quotes:
-                in_double_quotes = False
-                things_to_remove[-1][-1] = i
-            elif not in_single_quotes and not in_single_comment and not in_multi_comment:
-                in_double_quotes = True
-                is_quote.append(len(things_to_remove))
-                things_to_remove.append([i,-1])
-        elif contents[i] == "\'" and contents[i-1] != "\\":
-            if in_single_quotes:
-                in_single_quotes = False
-                things_to_remove[-1][-1] = i
-            elif not in_double_quotes and not in_multi_comment and not in_single_comment:
-                in_single_quotes = True
-                is_quote.append(len(things_to_remove))
-                things_to_remove.append([i,-1])
-
-    # Remove identified comments and strings in reverse order, adding quotes for... quotes
-    for i in range(len(things_to_remove) -1, -1, -1):
-        start_index, end_index = things_to_remove[i]
-        if i in is_quote:
-            # print("Removing Quote: " + contents[start_index:end_index+1])
-            contents = contents[:start_index] +"\"\"" + contents[end_index + 1:]
-        else:
-            # print("Removing Comment: " + contents[start_index:end_index+1])
-            contents = contents[:start_index] + contents[end_index + 1:]
-
-    return contents
-
 # Assumes that content has already been preprocessed
 def get_exported_variables(contents):
     exported_variables = []
