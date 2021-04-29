@@ -375,5 +375,40 @@ def compare(lower_version_directory, higher_version_directory):
 
     return deltas.tolist()
 
+def get_equivalence_score(lower_version_directory, higher_version_directory):
+
+    # Get deltas
+    deltas = compare(lower_version_directory, higher_version_directory)
+    class_ct, class_delta = deltas[0]
+    class_property_ct, class_property_delta = deltas[1]
+    class_function_ct, class_function_delta = deltas[2]
+    class_function_param_ct, class_function_param_delta = deltas[3]
+    variable_ct, variable_delta = deltas[4]
+    function_ct, function_delta = deltas[5]
+    function_param_ct, function_param_delta = deltas[6]
+
+    # Compute score
+    equivalence_score = 1.0
+    if class_delta > 0:
+        equivalence_score -= 0.1
+        equivalence_score -= (class_delta / class_ct) * 0.5
+    if class_property_delta > 0:
+        equivalence_score -= 0.05
+        equivalence_score -= (class_property_delta / class_property_ct) * 0.5
+    if class_function_delta > 0:
+        equivalence_score -= 0.05
+        equivalence_score -= (class_property_delta / class_property_ct) * 0.5
+    if class_function_param_delta > 0:
+        equivalence_score -= (class_function_param_delta / class_function_param_ct) * 0.5
+    if variable_delta > 0:
+        equivalence_score -= (variable_delta / variable_ct) * 0.3
+    if function_delta > 0:
+        equivalence_score -= 0.2
+        equivalence_score -= (function_delta / function_ct) * 0.3
+    if function_param_delta > 0:
+        equivalence_score -= (function_param_delta / function_param_ct) * 0.3
+
+    return equivalence_score
+
 if __name__ == "__main__":
-    print(compare("../test_lower_version", "../test_higher_version"))
+    print(get_equivalence_score("../test_lower_version", "../test_higher_version"))
