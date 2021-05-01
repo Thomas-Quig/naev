@@ -1,7 +1,8 @@
 # Python Imports
 
 # naev Imports
-from utils.utils import *
+from utils.static import *
+from utils.general import *
 
 # 3rd Party Imports
 import numpy as np

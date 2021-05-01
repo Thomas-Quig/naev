@@ -1,6 +1,7 @@
 # Python Imports
 from os import listdir
 from os.path import isfile, join
+import general
 
 # Obtain the contents of a file as a single string
 def get_file_contents(filename):
@@ -9,20 +10,7 @@ def get_file_contents(filename):
         contents = f.read()
     return contents
 
-# Obtain a list of the relatve path of every js file contained in the given directory
-def get_all_js_files(directory):
-    files = [f for f in listdir(directory) if isfile(join(directory, f))]
-    directories = [d for d in listdir(directory) if not isfile(join(directory, d))]
 
-    js_files = []
-    for f in files:
-        if f[-3:] == ".js":
-            js_files.append(join(directory, f))
-
-    for d in directories:
-        js_files.extend(get_all_js_files(join(directory, d)))
-
-    return js_files
 
 def remove_comments_and_strings(contents):
 
@@ -169,6 +157,9 @@ def count_expects(contents, for_iteration_guess, while_iteration_guess):
         expect_count += while_iteration_guess * count_expects(body, for_iteration_guess, while_iteration_guess)
     
     return expect_count
+
+def gen_expect_dict(contents):
+    testList = contents.split('test(')
 
 def get_expect_count(file_path, for_iteration_guess, while_iteration_guess):
     
