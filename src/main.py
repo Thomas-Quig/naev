@@ -5,11 +5,11 @@ import os
 from utils.general import *
 from utils.testing import *
 from utils.static import *
-
+from testsuite_compare import *
 # 3rd Party Imports
 
 def main():
-	get_pkg_src('naev-npm','1.0.0')
+	compare_tests('naev-npm','1.5.0','1.6.0',debug=True)
 	
 if __name__ == '__main__':
 	main()

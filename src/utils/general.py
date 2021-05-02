@@ -1,4 +1,11 @@
-from os import *
+from os import system,chdir,getcwd
+from os.path import basename, normpath, isdir
+
+def checkTemp():
+    if not basename(normpath(getcwd())) == 'temp':
+        if not isdir('./temp'):
+            system('mkdir ./temp')
+        chdir('./temp')
 
 # Obtain a list of the relatve path of every js file contained in the given directory
 def get_all_js_files(directory):
@@ -23,21 +30,27 @@ def get_file_contents(filename):
     return contents
 
 # Get the old version v1 of a file, and the new version v2
-def get_two_versions(packname, v1, v2):
+def load_two_versions(packname, v1, v2):
+    print(f'Loading {packname} {v1} and {v2}')
     get_pkg_src(packname,v1)
     get_pkg_src(packname,v2)
 
 def formatPath(packname,version):
-    return f'{packname}/{packname}-{version}'
+    return f'{getcwd()}/{packname}/{packname}-{version}'
 
 '''
     Get the package src
     YES THIS IS SUBJECT TO TAKEOVER AS THE INPUT IS NOT PARSED
     NO I'M NOT GOING TO SANITIZE THE INPUTS
 '''
-def get_pkg_src(packname,version):
+def get_pkg_src(packname,version, force=False):
     fpath = formatPath(packname,version)
-    tarPath = './temp/' + fpath + '.tgz'
-    system('mkdir -p ./temp/' + fpath)
+
+    # If the directory already exists (and you arent forcing), assume it is legitimate and move on
+    if isdir(fpath) and not force:
+        return
+
+    tarPath = fpath + '.tgz'
+    system('mkdir -p ' + fpath)
     system('wget $(npm v ' + packname + '@' + version + ' dist.tarball) -O  ' + tarPath)
-    system("tar -xvzf " + tarPath + " -C ./temp/" + fpath + " && rm " + tarPath)
+    system("tar -xvzf " + tarPath + " -C " + fpath + " && rm " + tarPath)

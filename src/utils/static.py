@@ -1,7 +1,7 @@
 # Python Imports
 from os import listdir
 from os.path import isfile, join
-import general
+import utils.general
 
 # Obtain the contents of a file as a single string
 def get_file_contents(filename):
@@ -113,9 +113,9 @@ def get_loop_bodies(contents):
             body = contents[end_of_conditions+1 : end_of_body].strip()
             body = body[1:].strip()
 
-            print("-----------------------")
-            print(body)
-            print("-----------------------")
+            #print("-----------------------")
+            #print(body)
+            #print("-----------------------")
 
             # Handle loop type specifics
             if contents[i-4:i] == "for(":
@@ -146,20 +146,41 @@ def count_expects(contents, for_iteration_guess, while_iteration_guess):
 
     # Get loop bodies and cut them out
     contents, for_loops, while_loops = get_loop_bodies(contents)
-
+    exp_dict = gen_expect_dict(contents)
     # Count expects that do not occur in loops
     expect_count = len(contents.split("expect(")) - 1
-
     # Add counts that do occur in loops
     for body in for_loops:
-        expect_count += for_iteration_guess * count_expects(body, for_iteration_guess, while_iteration_guess)
+        loop_expcount, loop_dict = count_expects(body,for_iteration_guess,while_iteration_guess)
+        expect_count += for_iteration_guess * loop_expcount
+        for ld_item in loop_dict:
+            if ld_item not in exp_dict:
+                exp_dict[ld_item] = loop_dict[ld_item] * for_iteration_guess
+            else:
+                exp_dict[ld_item] += loop_dict[ld_item] * for_iteration_guess
+
     for body in while_loops:
-        expect_count += while_iteration_guess * count_expects(body, for_iteration_guess, while_iteration_guess)
+        loop_expcount, loop_dict = count_expects(body,for_iteration_guess,while_iteration_guess)
+        expect_count += while_iteration_guess * loop_expcount
+        for ld_item in loop_dict:
+            if ld_item not in exp_dict:
+                exp_dict[ld_item] = loop_dict[ld_item] * while_iteration_guess
+            else:
+                exp_dict[ld_item] += loop_dict[ld_item] * while_iteration_guess
     
-    return expect_count
+    return expect_count, exp_dict
 
 def gen_expect_dict(contents):
-    testList = contents.split('test(')
+    ret = {}
+    expList = contents.split('expect(')[1:]
+    for expItem in expList:
+        fname = expItem.split('(')[0]
+        #print('Function name:' + fname)
+        if fname not in ret:
+            ret[fname] = 1
+        else:
+            ret[fname] += 1
+    return ret
 
 def get_expect_count(file_path, for_iteration_guess, while_iteration_guess):
     
@@ -169,7 +190,6 @@ def get_expect_count(file_path, for_iteration_guess, while_iteration_guess):
     # Preprocess contents
     contents = remove_comments_and_strings(contents)
     contents = " ".join(contents.split())
-
     # count expects
     return count_expects(contents, for_iteration_guess, while_iteration_guess)
 
