@@ -78,7 +78,8 @@ def compare_tests(package,vL,vU, debug=False):
     return retcode, diff
 
 def get_version_list(packname, force=False):
-    vListPath = normpath(getcwd()) + '/' +  packname + '-verlist.json'
+    vListPath = getcwd() + '/' +  packname + '-verlist.json'
+    # vListPath = vListPath.replace(" ", "\\ ")
     print(vListPath)
     ret = []
     if not force and isfile(vListPath):
@@ -87,7 +88,7 @@ def get_version_list(packname, force=False):
             ret.append(v)
         return ret
     else:
-        system('npm view ' + packname + ' versions --json >&1 > ' + vListPath)
+        system('npm view ' + packname + ' versions --json >&1 > ' + '"' + vListPath + '"')
 
         jLoad = json.loads(open(vListPath,'r').read())
         for v in jLoad:

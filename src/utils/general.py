@@ -1,5 +1,5 @@
-from os import system,chdir,getcwd
-from os.path import basename, normpath, isdir
+from os import system,chdir,getcwd, listdir
+from os.path import basename, normpath, isdir, isfile, join
 
 def checkTemp():
     if not basename(normpath(getcwd())) == 'temp':
@@ -50,6 +50,7 @@ def formatPath(packname,version):
 '''
 def get_pkg_src(packname,version, force=False):
     fpath = formatPath(packname,version)
+    fpath = fpath.replace(" ", "\ ")
 
     # If the directory already exists (and you arent forcing), assume it is legitimate and move on
     if isdir(fpath) and not force:

@@ -359,12 +359,12 @@ def compare(lower_version_directory, higher_version_directory):
     # Load lower version for parsing
     lower_version_files = {}
     for filepath in get_all_js_files(lower_version_directory):
-        lower_version_files[filepath.split("/")[-1]] = (get_file_contents(filepath))
+        lower_version_files[filepath.split("/")[-1]] = ("\n".join(get_file_contents(filepath)))
 
     # Load higher version for parsing
     higher_version_files = {}
     for filepath in get_all_js_files(higher_version_directory):
-        higher_version_files[filepath.split("/")[-1]] = (get_file_contents(filepath))
+        higher_version_files[filepath.split("/")[-1]] = ("\n".join(get_file_contents(filepath)))
     
     # Sum the deltas of every file
     deltas = np.zeros((7,2), dtype=np.int64)
@@ -412,4 +412,22 @@ def get_equivalence_score(lower_version_directory, higher_version_directory):
     return equivalence_score
 
 if __name__ == "__main__":
-    print(get_equivalence_score("../test_lower_version", "../test_higher_version"))
+    from testsuite_compare import get_version_list
+    from utils.general import get_pkg_src, checkTemp
+
+    checkTemp()
+
+    package_name = "naev-npm"
+    versions = get_version_list(package_name)[3:]
+
+    for version in versions:
+        get_pkg_src(package_name, version)
+
+    for i in range(0, len(versions)-1):
+        lower_version_directory = "./naev-npm/naev-npm-" + versions[i] + "/package/src"
+        for j in range(i+1, len(versions)):
+            higher_version_directory = "./naev-npm/naev-npm-" + versions[j] + "/package/src"
+            print(versions[i] + " --> " + versions[j] + ": " + str(get_equivalence_score(lower_version_directory, higher_version_directory)))
+
+
+    
