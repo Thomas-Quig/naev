@@ -30,6 +30,11 @@ def get_file_contents(filename):
     return contents
 
 # Get the old version v1 of a file, and the new version v2
+
+def load_src_from_vlist(packname,vlist):
+    for v in vlist:
+        get_pkg_src(packname,v)
+
 def load_two_versions(packname, v1, v2):
     print(f'Loading {packname} {v1} and {v2}')
     get_pkg_src(packname,v1)

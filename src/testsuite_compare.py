@@ -10,17 +10,18 @@ import json
 
 def run_tests(packname,vL,vU):
     basedir = getcwd()
-    system('rm -f' + packname + '/testResult*.json')
-    lPath = '/' + formatPath(packname,vL) + "/package"
-    uPath = '/' + formatPath(packname,vU) + "/package"
+    system('rm -f ' + packname + '/testResult*.json')
+    lPath = formatPath(packname,vL) + "/package"
+    uPath = formatPath(packname,vU) + "/package"
 
-    chdir(basedir + lPath)
+    chdir(lPath)
     print(getcwd())
     system('jest --all --silent --json --outputFile=../../testResultL.json -c=jest.config.json')
 
-    chdir(basedir + uPath)
+    chdir(uPath)
     print(getcwd())
     system('jest --all --silent --json --outputFile=../../testResultU.json -c=jest.config.json')
+    chdir(basedir)
 
 def compare_results(package):
     if not isfile('testResultL.json') or not isfile('testResultU.json'):
@@ -61,7 +62,8 @@ def compare_results(package):
 def compare_tests(package,vL,vU, debug=False):
     basedir = getcwd()
     load_two_versions(package,vL,vU)
-    clone_lower_tests(package,vL,vU)
+    if clone_lower_tests(package,vL,vU) == -1:
+        return 4, []
     run_tests(package,vL,vU)
     chdir(basedir + '/' + package)
     retcode, diff = compare_results(package)
@@ -72,10 +74,12 @@ def compare_tests(package,vL,vU, debug=False):
     else:
         if debug:
             print(f"Tests indicate versions {vL} and {vU} are identitlcal\nTo further confirm this check code coverage of the tests in {vL}, update for better coverage, and run again")
+    chdir(basedir)
     return retcode, diff
 
 def get_version_list(packname, force=False):
-    vListPath = getcwd() + '/' +  packname + '-verlist.json'
+    vListPath = normpath(getcwd()) + '/' +  packname + '-verlist.json'
+    print(vListPath)
     ret = []
     if not force and isfile(vListPath):
         jLoad = json.loads(open(vListPath,'r').read())
@@ -90,13 +94,13 @@ def get_version_list(packname, force=False):
             ret.append(v)
         return ret
 
-def compare_all_tests(packname):
+def compare_all_tests(packname,preload=True):
     vlist = []
     vlist = get_version_list(packname,force=False)
-    print(vlist)
+
     vlist.sort()
-    print(vlist)
-    
+    if(preload):
+        load_src_from_vlist(packname,vlist)
     # compatMatrix = [[0 for i in xrange(M)] for j in xrange(M)]
     compatDict = {}
     for i in range(0,len(vlist)):
@@ -110,6 +114,8 @@ def compare_all_tests(packname):
             #Checking for compatible only
             if retcode == 0:
                 compatDict[vL].append(vU)
+            else:
+                print(f'Error {retcode} occured while comparing {vL} and {vU}, check errlist')
     print(compatDict)
     return compatDict
 
@@ -122,7 +128,8 @@ if __name__ == '__main__':
     vL = input()
     print("Higher Version: ",end='')
     vU = input()'''
-
+    #vlist = get_version_list(pname)
+    #load_src_from_vlist(pname,vlist)
     compare_all_tests(pname)
 
     #compare_tests(pname,vL,vU)
