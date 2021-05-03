@@ -415,18 +415,13 @@ if __name__ == "__main__":
     from testsuite_compare import get_version_list
     from utils.general import get_pkg_src, checkTemp
 
-    checkTemp()
-
     package_name = "naev-npm"
-    versions = get_version_list(package_name)[3:]
-
-    for version in versions:
-        get_pkg_src(package_name, version)
+    versions = ["1.3.0", "1.3.1", "1.3.2", "1.3.3", "1.4.0", "1.5.0", "1.5.1", "1.6.0"]
 
     for i in range(0, len(versions)-1):
-        lower_version_directory = "./naev-npm/naev-npm-" + versions[i] + "/package/src"
+        lower_version_directory = "./naev-npm-static-versions/naev-npm-" + versions[i]
         for j in range(i+1, len(versions)):
-            higher_version_directory = "./naev-npm/naev-npm-" + versions[j] + "/package/src"
+            higher_version_directory = "./naev-npm-static-versions/naev-npm-" + versions[j]
             print(versions[i] + " --> " + versions[j] + ": " + str(get_equivalence_score(lower_version_directory, higher_version_directory)))
 
 
