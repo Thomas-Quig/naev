@@ -10,18 +10,21 @@ import json
 
 def run_tests(packname,vL,vU):
     basedir = getcwd()
-    system('rm -f ' + packname + '/testResult*.json')
-    lPath = formatPath(packname,vL) + "/package"
-    uPath = formatPath(packname,vU) + "/package"
+    assert(basedir.split('/')[-1] == packname)
+    system('rm -f ' + basedir + '/testResult*.json')
+    lPath = basedir + '/curLowVer'
+    uPath = basedir + '/curHighVer'
 
     chdir(lPath)
-    print(getcwd())
-    system('jest --all --silent --json --outputFile=../../testResultL.json -c=jest.config.json')
+    #print(getcwd())
+    system('jest --all --silent --json --outputFile=../testResultL.json -c=jest.config.json')
 
     chdir(uPath)
-    print(getcwd())
-    system('jest --all --silent --json --outputFile=../../testResultU.json -c=jest.config.json')
+    #print(getcwd())
+    system('jest --all --silent --json --outputFile=../testResultU.json -c=jest.config.json')
+
     chdir(basedir)
+    
 
 def compare_results(package):
     if not isfile('testResultL.json') or not isfile('testResultU.json'):
@@ -59,14 +62,27 @@ def compare_results(package):
 # Return values are below
 # retcode, data
 # Data can be a message, or it can be the test differences
-def compare_tests(package,vL,vU, debug=False):
+def compare_tests(package,vL,vU, debug=False,refreshPackages=False):
+
+    # Get base directory to ensure you are there at the end
     basedir = getcwd()
-    load_two_versions(package,vL,vU)
-    if clone_lower_tests(package,vL,vU) == -1:
+
+    # Load vL and vU
+    load_two_versions(package,vL,vU,forceRefresh=refreshPackages)
+
+    # If tests dont exist in vL, return as such
+    if setup_testing(package,vL,vU) == -1:
         return 4, []
-    run_tests(package,vL,vU)
+
+    
+    # Otherwise, run the tests from inside /temp/packname and save the test results
+    # into testResultL.json and testResultU.json in the packname folder
     chdir(basedir + '/' + package)
+    run_tests(package,vL,vU)
+
+    # Compare the results 
     retcode, diff = compare_results(package)
+
     if retcode != 0:
         if debug:
             print(f"!! Versions {vL} and {vU} differ!!\nERRCODE: {retcode}\n[(funcName,(old,new))]")
@@ -74,6 +90,8 @@ def compare_tests(package,vL,vU, debug=False):
     else:
         if debug:
             print(f"Tests indicate versions {vL} and {vU} are identitlcal\nTo further confirm this check code coverage of the tests in {vL}, update for better coverage, and run again")
+    
+    # Return to base directory and exit
     chdir(basedir)
     return retcode, diff
 
@@ -94,22 +112,22 @@ def get_version_list(packname, force=False):
             ret.append(v)
         return ret
 
-def compare_all_tests(packname,preload=True):
+def compare_all_tests(packname,preload=True,refresh=False):
     vlist = []
     vlist = get_version_list(packname,force=False)
 
     vlist.sort()
     if(preload):
-        load_src_from_vlist(packname,vlist)
+        load_src_from_vlist(packname,vlist,forceRefresh=refresh)
     # compatMatrix = [[0 for i in xrange(M)] for j in xrange(M)]
     compatDict = {}
-    for i in range(0,len(vlist)):
+    for i in range(0,len(vlist) - 1):
         vL = vlist[i]
         compatDict[vL] = []
-        for j in range(i + 1, len(vlist) - 1):
+        for j in range(i + 1, len(vlist)):
             vU = vlist[j]
             print(f'Comparing {vL} and {vU}')
-            retcode,diff = compare_tests(packname,vL,vU)
+            retcode,diff = compare_tests(packname,vL,vU,refreshPackages=(refresh and (not preload)))
             
             #Checking for compatible only
             if retcode == 0:
@@ -119,18 +137,43 @@ def compare_all_tests(packname,preload=True):
     print(compatDict)
     return compatDict
 
+def compare_sequential_tests(packname,preload=True,refresh=False):
+    vlist = []
+    vlist = get_version_list(packname,force=refresh)
+
+    vlist.sort()
+    if(preload and refresh):
+        load_src_from_vlist(packname,vlist,forceRefresh=refresh)
+    # compatMatrix = [[0 for i in xrange(M)] for j in xrange(M)]
+    compatDict = {}
+    for i in range(0,len(vlist) - 1):
+        vL = vlist[i]
+        compatDict[vL] = []
+        vU = vlist[i + 1]
+        print(f'Comparing {vL} and {vU}')
+        retcode,diff = compare_tests(packname,vL,vU,refreshPackages=(refresh and (not preload)))
+        
+        #Checking for compatible only
+        if retcode == 0:
+            compatDict[vL].append(vU)
+        else:
+            print(f'Error {retcode} occured while comparing {vL} and {vU}, check errlist')
+    print(compatDict)
+    return compatDict
+
 if __name__ == '__main__':
     checkTemp()
-    print("Package Name: ",end='')
+    '''print("Package Name: ",end='')
     pname = input()
     
-    '''print("Lower Version: ",end='')
+    
+    print("Lower Version: ",end='')
     vL = input()
     print("Higher Version: ",end='')
-    vU = input()'''
-    #vlist = get_version_list(pname)
-    #load_src_from_vlist(pname,vlist)
-    compare_all_tests(pname)
-
-    #compare_tests(pname,vL,vU)
-    #compare_results('naev-npm','1.3.1','1.3.2')
+    vU = input()
+    '''
+    #print(compare_tests(pname,vL,vU,debug=True,refreshPackages=False))
+    compare_all_tests('naev-npm',preload=False,refresh=False)
+    #vlist = get_version_list(pname,force=True)
+    #load_src_from_vlist(pname,vlist,forceRefresh=True)
+    #compare_sequential_tests(pname,preload=False,refresh=False)

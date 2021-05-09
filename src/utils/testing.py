@@ -1,27 +1,33 @@
 from utils.general import *
-from os import system
+from os import system, getcwd
 from os.path import isdir
 
 def testPath(pN,v):
-    fpath = formatPath(pN,v)
-    if isdir(fpath + '/package/test'):
-        return fpath + '/package/test'
-    elif isdir(fpath + '/package/tests'):
-        return fpath + '/package/tests'
-    elif isdir(fpath + '/package/__tests__'):
-        return fpath + '/package/__tests__'
-    elif isdir(fpath + '/package/__test__'):
-        return fpath + '/package/__test__'
+    fpath = formatPath(pN,v) + '/package'
+    system('ls ' + fpath)
+    if isdir(fpath + '/test'):
+        return '/test'
+    elif isdir(fpath + '/tests'):
+        return '/tests'
+    elif isdir(fpath + '/__tests__'):
+        return '/__tests__'
+    elif isdir(fpath + '/__test__'):
+        return '/__test__'
     else:
         print("ERROR: TESTS NOT FOUND")
         return None
-
-def clone_lower_tests(packname,vL,vU):
-    testPL = testPath(packname,vL)
-    testPU = testPath(packname,vU)
-    if testPL is None or testPU is None:
+ 
+def setup_testing(packname,vL,vU):
+    testPL = getcwd() + '/' + packname + '/curLowVer'
+    testPU = getcwd() + '/' + packname + '/curHighVer'
+    system('rm -rf ' + testPL + ' ' + testPU)
+    system('cp -r ' + formatPath(packname,vL) + '/package' + ' ' + testPL)
+    system('cp -r ' + formatPath(packname,vU) + '/package' + ' ' + testPU)
+    
+    testLoc = testPath(packname,vL)
+    if testLoc is None:
         return -1
     else:
-        system('rm -r ' + testPU)
-        system('cp -r ' + testPL + ' ' + testPU)
+        system('rm -r ' + testPU + testLoc)
+        system('cp -r ' + testPL + testLoc + ' ' + testPU)
         return 0

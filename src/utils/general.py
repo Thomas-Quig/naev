@@ -31,14 +31,14 @@ def get_file_contents(filename):
 
 # Get the old version v1 of a file, and the new version v2
 
-def load_src_from_vlist(packname,vlist):
+def load_src_from_vlist(packname,vlist,forceRefresh=False):
     for v in vlist:
-        get_pkg_src(packname,v)
+        get_pkg_src(packname,v,force=forceRefresh)
 
-def load_two_versions(packname, v1, v2):
+def load_two_versions(packname, v1, v2, forceRefresh=False):
     print(f'Loading {packname} {v1} and {v2}')
-    get_pkg_src(packname,v1)
-    get_pkg_src(packname,v2)
+    get_pkg_src(packname,v1,force=forceRefresh)
+    get_pkg_src(packname,v2,force=forceRefresh)
 
 def formatPath(packname,version):
     return f'{getcwd()}/{packname}/{packname}-{version}'
@@ -56,6 +56,7 @@ def get_pkg_src(packname,version, force=False):
         return
 
     tarPath = fpath + '.tgz'
+    system('rm -r ' + fpath)
     system('mkdir -p ' + fpath)
     system('wget $(npm v ' + packname + '@' + version + ' dist.tarball) -O  ' + tarPath)
     system("tar -xvzf " + tarPath + " -C " + fpath + " && rm " + tarPath)
